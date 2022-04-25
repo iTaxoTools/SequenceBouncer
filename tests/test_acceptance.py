@@ -32,7 +32,7 @@ def test_acceptance(test: AcceptanceTest, tmp_path: Path) -> None:
     tmp_input = tmp_path / test.input
     copy(str(test_input), str(tmp_input))
 
-    SequenceBouncer(str(tmp_input))
+    SequenceBouncer(str(tmp_input))()
 
     for test_file in test_path.iterdir():
         tmp_file = tmp_path / test_file.name
