@@ -24,12 +24,12 @@ setup(
         include=('itaxotools*',),
         where='src',
     ),
-    python_requires='>=3.9, <3.10',
+    python_requires='>=3.9, <4',
     install_requires=[
-        'biopython==1.78',
-        'matplotlib==3.4.2',
-        'numpy==1.20.2',
-        'pandas==1.2.4',
+        'biopython>=1.78',
+        'matplotlib>=3.4.2',
+        'numpy>=1.20.2',
+        'pandas>=1.2.4',
         ],
     extras_require={
         'dev': ['pytest>=6.2.5'],
