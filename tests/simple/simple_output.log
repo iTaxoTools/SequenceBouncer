@@ -1,0 +1,76 @@
+
+SequenceBouncer: A method to remove outlier entries from a multiple sequence alignment
+
+Cory Dunn
+University of Helsinki
+cory.dunn@helsinki.fi
+Version: 1.23
+Please cite DOI: 10.1101/2020.11.24.395459
+___
+
+Analyzing 'tests/simple/simple.fasta'.
+Flags are --IQR_coefficient: 1.0, -subsample_size: 4, --gap_percent_cut: 2.0
+Input alignment length is: 32 characters.
+Input alignment depth is: 4 sequences.
+Generating sequence dataframe.
+Calculating Shannon entropy values and gap metrics across all input sequences.
+Printed gap distribution of input alignment to file: tests/simple/simple_gap_plot.pdf
+Maximum Shannon entropy alignment score before gap % considered: 1.5
+Maximum Shannon entropy alignment score after gap % considered: 1.5
+Removing gapped positions from analysis set.
+Elapsed time: ~ 0 seconds.
+Alignment positions analyzed after 2.0% gap cutoff: 8
+Preparing sequences for comparison.
+Beginning sequence trials.
+Printed median values of sequence comparisons from full analysis to file tests/simple/simple_median_plot.pdf
+Elapsed time: ~ 0 seconds.
+Estimated total time for analysis: ~ 0 seconds.
+Cut-off value for median taken across comparisons (full-alignment pairwise analysis): 9.0
+Writing cleaned alignment as FASTA.
+  Accession                          Sequence
+0   Sample1  ACTGACTG----------------ACTGACTG
+1   Sample2  TCGATCGA----------------ACTGACTG
+2   Sample3  ACTGACTGTGC-------------ACTGACTG
+Writing rejected sequences to FASTA.
+  Accession                          Sequence
+3   SampleX  -----ACTGACTGACTGACTGACTGACTG---
+Analysis complete.
+Total time for analysis: ~ 0 seconds.
+
+SequenceBouncer: A method to remove outlier entries from a multiple sequence alignment
+
+Cory Dunn
+University of Helsinki
+cory.dunn@helsinki.fi
+Version: 1.23
+Please cite DOI: 10.1101/2020.11.24.395459
+___
+
+Analyzing 'tests/simple/simple.fasta'.
+Flags are --IQR_coefficient: 1.0, -subsample_size: 4, --gap_percent_cut: 2.0
+Input alignment length is: 32 characters.
+Input alignment depth is: 4 sequences.
+Generating sequence dataframe.
+Calculating Shannon entropy values and gap metrics across all input sequences.
+Printed gap distribution of input alignment to file: tests/simple/simple_gap_plot.pdf
+Maximum Shannon entropy alignment score before gap % considered: 1.5
+Maximum Shannon entropy alignment score after gap % considered: 1.5
+Removing gapped positions from analysis set.
+Elapsed time: ~ 0 seconds.
+Alignment positions analyzed after 2.0% gap cutoff: 8
+Preparing sequences for comparison.
+Beginning sequence trials.
+Printed median values of sequence comparisons from full analysis to file tests/simple/simple_median_plot.pdf
+Elapsed time: ~ 0 seconds.
+Estimated total time for analysis: ~ 0 seconds.
+Cut-off value for median taken across comparisons (full-alignment pairwise analysis): 9.0
+Writing cleaned alignment as FASTA.
+  Accession                          Sequence
+0   Sample1  ACTGACTG----------------ACTGACTG
+1   Sample2  TCGATCGA----------------ACTGACTG
+2   Sample3  ACTGACTGTGC-------------ACTGACTG
+Writing rejected sequences to FASTA.
+  Accession                          Sequence
+3   SampleX  -----ACTGACTGACTGACTGACTGACTG---
+Analysis complete.
+Total time for analysis: ~ 0 seconds.
