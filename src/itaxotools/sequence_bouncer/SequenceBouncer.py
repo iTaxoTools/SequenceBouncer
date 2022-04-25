@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# coding: utf-8 
+# coding: utf-8
 
 # Funding received from the Sigrid Jusélius Foundation contributed to the development of this software.
 # Author: Cory Dunn
@@ -17,7 +17,6 @@ import numpy as np
 import time
 import sys
 import math
-import argparse
 import gc
 import random
 import logging
@@ -25,57 +24,55 @@ import matplotlib.pyplot as plt
 from matplotlib import rcParams
 from matplotlib.backends.backend_pdf import PdfPages
 
-# Define the calculation engine
 
-def engine():
-    for counter_x in range(table_sample_numpy_rows):
-                counter_x_numpy_row = table_sample_numpy[counter_x:(counter_x+1),:]
-                if depth_of_alignment < 1000 and ((counter_x+1)/25) == ((counter_x+1)//25):
-                    mylogs.info('\rSequences analyzed: '+str(counter_x+1))
-                elif depth_of_alignment < 10000 and ((counter_x+1)/250) == ((counter_x+1)//250):
-                    mylogs.info('\rSequences analyzed: '+str(counter_x+1))
-                elif depth_of_alignment < 100000 and ((counter_x+1)/2500) == ((counter_x+1)//2500):
-                    mylogs.info('\rSequences analyzed: '+str(counter_x+1))
-                for counter_y in range((counter_x+1)):
-                    counter_y_numpy_row = table_sample_numpy[counter_y:(counter_y+1),:]
-                    comparison_bool_series_match = counter_x_numpy_row == counter_y_numpy_row
-                    comparison_bool_series_NOT_match = counter_x_numpy_row != counter_y_numpy_row
-                    entropy_record_match = entropy_record_numpy[(comparison_bool_series_match)]
-                    entropy_record_NOT_match = entropy_record_numpy[(comparison_bool_series_NOT_match)]
-                    match_entropy_total = entropy_record_match.sum(axis=0)
-                    NOT_match_entropy_minus_max_entropy = entropy_record_NOT_match - max_entropy_after_gaps
-                    NOT_match_entropy_total =  NOT_match_entropy_minus_max_entropy.sum(axis=0)
-                    total_entropy_recorded = match_entropy_total + NOT_match_entropy_total
-                    entropy_array[counter_x, counter_y] = total_entropy_recorded
-                    entropy_array[counter_y, counter_x] = total_entropy_recorded
-    return entropy_array
+def SequenceBouncer(
+    input_file,
+    output_file=None,
+    gap_percent_cut=2.0,
+    IQR_coefficient=1.0,
+    subsample_size=0,
+    trials=1,
+    stringency=2,
+    random_seed=None,
+):
 
-if __name__ == "__main__" :
-    
-   
-    # Load files, receive parameters, and provide assistance
+    # Define the calculation engine
 
-    ap = argparse.ArgumentParser()
-    ap.add_argument('-i','--input_file',required=True,type=str,help='Input file in FASTA format.\n')
-    ap.add_argument('-o','--output_file',required=False,type=str,default='X',help="Output filestem [do not include extensions] (default will be '<input_filestem>.ext').\n")
-    ap.add_argument('-g','--gap_percent_cut',required=False,type=float,default=2.0,help='For columns with a greater fraction of gaps than the selected value, expressed in percent, data will be ignored in calculations (default is 2).\n')
-    ap.add_argument('-k','--IQR_coefficient',required=False,type=float,default=1.0,help='Coefficient multiplied by the interquartile range that helps to define an outlier sequence (default is 1.0).\n')
-    ap.add_argument('-n','--subsample_size',required=False,type=int,default=0,help='|> Available for large alignments | The size of a single sample taken from the full dataset (default is entire alignment, but try a subsample size of 50 or 100 for large alignments).\n')
-    ap.add_argument('-t','--trials',required=False,type=int,default=1,help='|> Available for large alignments | Number of times each sequence is sampled and tested (default is to examine all sequences in one single trial, but 5 or 10 trials may work well when subsamples are taken from large alignments).\n')
-    ap.add_argument('-s','--stringency',required=False,type=int,default=2,help='|> Available for large alignments | 1: Minimal stringency 2: Moderate stringency 3: Maximum stringency (default is moderate stringency).\n')
-    ap.add_argument('-r','--random_seed',required=False,type=int,default=random.randint(0,1000),help='Random seed (integer) to be used during a sampling-based approach (default is that the seed is randomly selected). The user can use this seed to obtain reproducible output and should note it in their publications. \n')
+    def engine():
+        for counter_x in range(table_sample_numpy_rows):
+                    counter_x_numpy_row = table_sample_numpy[counter_x:(counter_x+1),:]
+                    if depth_of_alignment < 1000 and ((counter_x+1)/25) == ((counter_x+1)//25):
+                        mylogs.info('\rSequences analyzed: '+str(counter_x+1))
+                    elif depth_of_alignment < 10000 and ((counter_x+1)/250) == ((counter_x+1)//250):
+                        mylogs.info('\rSequences analyzed: '+str(counter_x+1))
+                    elif depth_of_alignment < 100000 and ((counter_x+1)/2500) == ((counter_x+1)//2500):
+                        mylogs.info('\rSequences analyzed: '+str(counter_x+1))
+                    for counter_y in range((counter_x+1)):
+                        counter_y_numpy_row = table_sample_numpy[counter_y:(counter_y+1),:]
+                        comparison_bool_series_match = counter_x_numpy_row == counter_y_numpy_row
+                        comparison_bool_series_NOT_match = counter_x_numpy_row != counter_y_numpy_row
+                        entropy_record_match = entropy_record_numpy[(comparison_bool_series_match)]
+                        entropy_record_NOT_match = entropy_record_numpy[(comparison_bool_series_NOT_match)]
+                        match_entropy_total = entropy_record_match.sum(axis=0)
+                        NOT_match_entropy_minus_max_entropy = entropy_record_NOT_match - max_entropy_after_gaps
+                        NOT_match_entropy_total =  NOT_match_entropy_minus_max_entropy.sum(axis=0)
+                        total_entropy_recorded = match_entropy_total + NOT_match_entropy_total
+                        entropy_array[counter_x, counter_y] = total_entropy_recorded
+                        entropy_array[counter_y, counter_x] = total_entropy_recorded
+        return entropy_array
 
-    args = vars(ap.parse_args())
-    input_sequence = args['input_file']
-    stringency_flag = args['stringency']
-    min_trials_for_each_sequence = args['trials']
-    multiplier_on_interquartile_range = args['IQR_coefficient']
-    number_in_small_test = args['subsample_size']
-    gap_value_cutoff = args['gap_percent_cut']
-    output_entry = args['output_file']
-    seed = args['random_seed']
+    random_seed = random_seed or random.randint(0,1000)
 
-    if output_entry == 'X':
+    input_sequence = input_file
+    stringency_flag = stringency
+    min_trials_for_each_sequence = trials
+    multiplier_on_interquartile_range = IQR_coefficient
+    number_in_small_test = subsample_size
+    gap_value_cutoff = gap_percent_cut
+    output_entry = output_file
+    seed = random_seed
+
+    if output_entry is None:
         sep = '.'
         input_strip = input_sequence.split(sep, 1)[0]
         output_entry = input_strip
@@ -84,7 +81,7 @@ if __name__ == "__main__" :
         output_rejected = input_strip + '_output_rejected.fasta'
         output_tabular = input_strip + '_output_analysis.csv'
         output_full_table = input_strip + '_full_comparison_table.csv'
-    elif output_entry != 'X':
+    elif output_entry is not None:
         output_figure = output_entry + '_output_figure'
         output_sequence = output_entry + '_output_clean.fasta'
         output_rejected = output_entry + '_output_rejected.fasta'
@@ -103,7 +100,7 @@ if __name__ == "__main__" :
 
     file = logging.FileHandler(output_entry + '_output.log')
     mylogs.addHandler(file)
-    
+
     mylogs.info('\nSequenceBouncer: A method to remove outlier entries from a multiple sequence alignment\n')
     mylogs.info('Cory Dunn')
     mylogs.info('University of Helsinki')
@@ -111,10 +108,10 @@ if __name__ == "__main__" :
     mylogs.info('Version: ' + version)
     mylogs.info('Please cite DOI: 10.1101/2020.11.24.395459')
     mylogs.info('___\n')
-    
+
     # Start timer
 
-    start_time = time.time() 
+    start_time = time.time()
 
     # Initialize
 
@@ -152,7 +149,7 @@ if __name__ == "__main__" :
 
     for record_x in SeqIO.parse(input_sequence,"fasta"):
         record_x_toward_seq_dataframe = list(record_x.seq)
-        record_x_toward_seq_dataframe_lower = [x.lower() for x in record_x_toward_seq_dataframe] 
+        record_x_toward_seq_dataframe_lower = [x.lower() for x in record_x_toward_seq_dataframe]
         record_x_toward_seq_dataframe_ASCII = [ord(x) for x in record_x_toward_seq_dataframe_lower]
         sequence_records.append(record_x_toward_seq_dataframe_ASCII)
 
@@ -206,12 +203,12 @@ if __name__ == "__main__" :
     # Remove gapped positions
 
     entropylist_S_gap_considered = entropylist_S.drop(gap_percent_bool_index_remove)
-    
+
     if entropylist_S_gap_considered.size == 0:
         mylogs.info('All columns were removed as gaps.')
         mylogs.info('Choose a larger value for --gap_percent_cut to continue.')
         exit()
-    
+
     max_entropy_before_gaps = pd.Series.max(entropylist_S)
     mylogs.info('Maximum Shannon entropy alignment score before gap % considered: ' + str(round(max_entropy_before_gaps,2)))
     max_entropy_after_gaps = pd.Series.max(entropylist_S_gap_considered)
@@ -260,40 +257,40 @@ if __name__ == "__main__" :
 
 
     for trial in range(min_trials_for_each_sequence):
-        
+
         if min_trials_for_each_sequence > 1:
             mylogs.info("Trial: " + str(trial+1) + " of " + str(min_trials_for_each_sequence))
-        
+
         sequence_dataframe_gap_considered = sequence_dataframe_gap_considered.sample(frac=1,random_state = seed) # shuffle master sequence dataframe, use user-defined or standard random seed
         sequence_dataframe_gap_considered_max_keep = sequence_dataframe_gap_considered # copy shuffled version for work below
 
-        for j in range(times_to_sample_max_keep): 
+        for j in range(times_to_sample_max_keep):
             if number_in_small_test != depth_of_alignment and (j+1)//50 == (j+1)/50:
                 mylogs.info('\rSample: '+str((j+1)) + ' of ' +str(times_to_sample_max_keep) + ' | Trial: ' + str(trial+1))
             max_times_tested = record_sequence_trial_results['Total_trials'].max()
-            
+
             if max_times_tested > trial:
-                
+
                 sequence_dataframe_gap_considered_max_keep = sequence_dataframe_gap_considered.loc[record_sequence_trial_results['Total_trials'] != max_times_tested]
-        
+
             length_sequence_dataframe_gap_considered_max_keep = len(sequence_dataframe_gap_considered_max_keep)
-            
+
             if length_sequence_dataframe_gap_considered_max_keep >= number_in_small_test:
                 number_to_choose = number_in_small_test
-        
+
             elif length_sequence_dataframe_gap_considered_max_keep < number_in_small_test:
                 number_to_choose = length_sequence_dataframe_gap_considered_max_keep
-            
+
             table_sample = sequence_dataframe_gap_considered_max_keep.iloc[0:number_to_choose,:]
             table_sample_numpy = table_sample.to_numpy() # convert pandas dataframe to numpy array
             table_sample_numpy = table_sample_numpy.astype(np.int8) # change datatype in an attempt to reduce memory immylogs.info
             table_sample_numpy_rows, table_sample_numpy_columns = table_sample_numpy.shape
-        
+
         # Initiate numpy array for entropy calculation values
-        
+
             entropy_array = np.empty((number_to_choose,number_to_choose),dtype=float)
             entropy_array[:] = np.nan
-                            
+
         # Calculations of match or not, and sum entropy values
 
             engine()
@@ -307,10 +304,10 @@ if __name__ == "__main__" :
             entropy_DF_analysis_empty = np.empty((number_to_choose,1))
             entropy_DF_analysis_empty[:] = np.nan
             entropy_DF_analysis = pd.DataFrame(data = entropy_DF_analysis_empty, index=entropy_DF.index, columns=['Median'])
-            
+
             for z in entropy_DF:
                 entropy_DF_analysis.loc[z,'Median'] = entropy_DF.loc[z,:].median(skipna=True)
-        
+
             record_sequence_trial_results.loc[entropy_DF_analysis.index,'Total_trials'] += 1
 
     # Calculate interquartile range and outlier cutoff
@@ -344,7 +341,7 @@ if __name__ == "__main__" :
             entropy_DF_analysis_above_cutoff = entropy_DF_analysis > upper_cutoff
             entropy_median_too_high = entropy_DF_analysis_above_cutoff.loc[entropy_DF_analysis_above_cutoff['Median'] == True]
             record_sequence_trial_results.loc[entropy_median_too_high.index,'Outlier_instances'] += 1
-        
+
         mylogs.info("Elapsed time: ~ " + str(int(time.time() - start_time)) + " seconds.")
         mylogs.info("Estimated total time for analysis: ~ " + str(int(((time.time() - start_time))/(1+trial)*min_trials_for_each_sequence)) + " seconds.")
 
@@ -369,12 +366,12 @@ if __name__ == "__main__" :
 
     for record in SeqIO.parse(input_sequence,"fasta"):
         record_seq_convert_to_string.append(str(record.seq))
-        
+
     acc_records_S = pd.Series(alignment_record_name_list)
     sequence_records_S = pd.Series(record_seq_convert_to_string)
-        
+
     frame = { 'Accession': acc_records_S, 'Sequence': sequence_records_S }
-    FASTA_output_unclean_DF = pd.DataFrame(frame) 
+    FASTA_output_unclean_DF = pd.DataFrame(frame)
 
     # Plot trial results from sampling-based approach
 
@@ -417,7 +414,7 @@ if __name__ == "__main__" :
     FASTA_output_final_seq_list = FASTA_output_clean_DF.loc[:,'Sequence'].values.tolist()
 
     ofile = open(output_sequence, "w")
-        
+
     for seqi in range(len(FASTA_output_final_acc_list)):
         ofile.write(">" + FASTA_output_final_acc_list[seqi] + "\n" + FASTA_output_final_seq_list[seqi] + "\n")
     ofile.close()
@@ -428,7 +425,7 @@ if __name__ == "__main__" :
     mylogs.info(FASTA_output_reject_DF)
     FASTA_output_rejected_acc_list = FASTA_output_reject_DF.loc[:,'Accession'].values.tolist()
     FASTA_output_rejected_seq_list = FASTA_output_reject_DF.loc[:,'Sequence'].values.tolist()
-        
+
     ofile = open(output_rejected, "w")
     for seqi in range(len(FASTA_output_rejected_acc_list)):
         ofile.write(">" + FASTA_output_rejected_acc_list[seqi] + "\n" + FASTA_output_rejected_seq_list[seqi] + "\n")
