@@ -61,6 +61,9 @@ class SequenceBouncer():
         stringency=2,
         random_seed=None,
         write_log_file=True,
+        write_sequence_files=True,
+        write_table_files=True,
+        write_plot_files=True,
     ):
 
         self.vars = AttrDict()
@@ -74,10 +77,16 @@ class SequenceBouncer():
             stringency=stringency,
             random_seed=random_seed,
             write_log_file=write_log_file,
+            write_sequence_files=write_sequence_files,
+            write_table_files=write_table_files,
+            write_plot_files=write_plot_files,
         )
 
     def __call__(self):
-
+        """
+        Returns a dictionary where the keys are the sequence names,
+        and the values are True if accepted and False for outliers.
+        """
         v = self.vars
         p = self.params
 
@@ -188,21 +197,8 @@ class SequenceBouncer():
         v.entropylist_S = pd.Series(v.entropy_record)
         v.gap_fraction_S = pd.Series(v.gap_record)
 
-        # Plot gap fractions for alignment positions
-
-        v.gap_record.sort()
-        plotgaplistrange = np.arange(len(v.gap_record))
-        plt.plot(plotgaplistrange, v.gap_record, 'o', ms=1,c='slategrey')
-        plot_cutoff_label = 'Selected gap fraction cut-off: ' + str(v.gap_value_cutoff/100) + ' (' + str(v.gap_value_cutoff) + ' %)'
-        plt.axhline(y=v.gap_value_cutoff/100, color='teal', linestyle='--', label=plot_cutoff_label)
-        rcParams['font.family'] = 'sans-serif'
-        rcParams['font.sans-serif'] = ['Arial']
-        plt.xlabel('Input alignment column (Ordered by gap fraction)', fontsize=12)
-        plt.ylabel('Gap fraction', fontsize=12)
-        plt.legend()
-        plt.savefig(v.output_entry + '_gap_plot.pdf', format="pdf", bbox_inches="tight")
-        self.logger.info('Printed gap distribution of input alignment to file: ' + v.output_entry + '_gap_plot.pdf')
-        plt.close()
+        if p.write_plot_files:
+            self.write_gap_plot()
 
         # Generate boolean based upon gap values
 
@@ -237,10 +233,10 @@ class SequenceBouncer():
 
         comparison_time_full_table_seconds = v.depth_of_alignment * v.depth_of_alignment * (v.length_of_alignment-len(v.gap_percent_bool_index_remove)) * 3.14E-8
         if comparison_time_full_table_seconds > 1800 and v.number_in_small_test == v.depth_of_alignment:
-            self.logger.info('\n***WARNING: An input alignment of this size may take a considerable amount of time')
-            self.logger.info('   if all pairwise sequence comparisons are performed.')
-            self.logger.info('   A sampling-based approach may be considered.')
-            self.logger.info('   For a sampling-based approach, take advantage of the -n, -t, and -s flags.\n')
+            self.logger.warning('\n***WARNING: An input alignment of this size may take a considerable amount of time')
+            self.logger.warning('   if all pairwise sequence comparisons are performed.')
+            self.logger.warning('   A sampling-based approach may be considered.')
+            self.logger.warning('   For a sampling-based approach, take advantage of the -n, -t, and -s flags.\n')
 
         # Clear out unused items from memory
 
@@ -328,22 +324,8 @@ class SequenceBouncer():
                 CIQR = iqr * v.multiplier_on_interquartile_range
                 v.lower_cutoff, v.upper_cutoff = q25 - CIQR, q75 + CIQR
 
-        # Plot comparison values, along with selected cut-off IQR cut-off value for full analysis
-
-                if v.number_in_small_test == v.depth_of_alignment:
-                    v.entropy_DF_analysis_values_list.sort()
-                    plotlistrange = np.arange(len(v.entropy_DF_analysis_values_list))
-                    plt.plot(plotlistrange, v.entropy_DF_analysis_values_list, 'o', ms=1,c='darkgreen')
-                    plot_cutoff_label = 'Selected IQR cut-off:  ' + str(v.multiplier_on_interquartile_range)
-                    plt.axhline(y=v.upper_cutoff, color='red', linestyle='--', label=plot_cutoff_label)
-                    rcParams['font.family'] = 'sans-serif'
-                    rcParams['font.sans-serif'] = ['Arial']
-                    plt.xlabel('Sequence', fontsize=12)
-                    plt.ylabel('Median across pairwise comparisons (Ordered by median value)', fontsize=12)
-                    plt.legend()
-                    plt.savefig(v.output_entry + '_median_plot.pdf', format="pdf", bbox_inches="tight")
-                    self.logger.info('Printed median values of sequence comparisons from full analysis to file ' + v.output_entry + '_median_plot.pdf')
-                    plt.close()
+                if p.write_plot_files:
+                    self.write_median_plot()
 
         # Identify the outlier sequences using the interquartile range cutoff
 
@@ -354,121 +336,41 @@ class SequenceBouncer():
             self.logger.info("Elapsed time: ~ " + str(int(time.time() - v.start_time)) + " seconds.")
             self.logger.info("Estimated total time for analysis: ~ " + str(int(((time.time() - v.start_time))/(1+trial)*v.min_trials_for_each_sequence)) + " seconds.")
 
-        # Print full distance matrix for analysis and generate a plot only if a single test of all sequences versus all sequences was performed
-
-        if v.number_in_small_test == v.depth_of_alignment:
-
-            self.logger.info('Cut-off value for median taken across comparisons (full-alignment pairwise analysis): ' + str(round(v.upper_cutoff,1)))
-            v.entropy_DF.sort_index(axis=0,inplace=True,ascending=True)
-            v.entropy_DF.sort_index(axis=1,inplace=True,ascending=True)
-            v.entropy_DF.index = v.alignment_record_name_list
-            v.entropy_DF.columns = v.alignment_record_name_list
-            v.entropy_DF['Median_across_pairwise_comparisons'] = v.entropy_DF.median(axis=1) # add column calculating median across pairwise comparisons
-            first_column = v.entropy_DF.pop('Median_across_pairwise_comparisons')
-            v.entropy_DF.insert(0,'Median_across_pairwise_comparisons',first_column)
-            v.entropy_DF.to_csv(v.output_full_table)
-
-        # Prepare dataframe to generate FASTA files
+        if p.write_table_files:
+            self.write_full_table()
 
         v.record_sequence_trial_results['Fraction_positive'] = v.record_sequence_trial_results['Outlier_instances'] / v.record_sequence_trial_results['Total_trials']
-        record_seq_convert_to_string = []
 
-        for record in SeqIO.parse(v.input_sequence,"fasta"):
-            record_seq_convert_to_string.append(str(record.seq))
+        if p.write_sequence_files:
+            self.write_sequence_files()
 
-        acc_records_S = pd.Series(v.alignment_record_name_list)
-        sequence_records_S = pd.Series(record_seq_convert_to_string)
-        frame = { 'Accession': acc_records_S, 'Sequence': sequence_records_S }
-        v.FASTA_output_unclean_DF = pd.DataFrame(frame)
-
-        # Plot trial results from sampling-based approach
-
-        if v.number_in_small_test != v.depth_of_alignment:
-            record_sequence_trial_results_list = v.record_sequence_trial_results['Fraction_positive'].tolist()
-            record_sequence_trial_results_list.sort()
-            plottrialrange = np.arange(len(record_sequence_trial_results_list))
-            plt.plot(plottrialrange, record_sequence_trial_results_list, 'o', ms=1,c='deepskyblue')
-            rcParams['font.family'] = 'sans-serif'
-            rcParams['font.sans-serif'] = ['Arial']
-            plt.xlabel('Sequence', fontsize=12)
-            plt.ylabel('Fraction of times sequence called aberrant (In order of increasing positive calls)', fontsize=12)
-            plt.savefig(v.output_entry + '_sampling_trials_plot.pdf', format="pdf", bbox_inches="tight")
-            self.logger.info('Printed plot of sampling trial results to file: ' + v.output_entry + '_sampling_trials_plot.pdf')
-            plt.close()
-
-        # Generating clean dataframes
-
-        if v.stringency_flag == 1: # minimal stringency
-            v.FASTA_output_clean_DF = v.FASTA_output_unclean_DF.loc[v.record_sequence_trial_results['Fraction_positive'] != 1]
-        if v.stringency_flag == 2: # moderate stringency
-            v.FASTA_output_clean_DF = v.FASTA_output_unclean_DF.loc[v.record_sequence_trial_results['Fraction_positive'] <= 0.5]
-        if v.stringency_flag == 3: # maximal stringency
-            v.FASTA_output_clean_DF = v.FASTA_output_unclean_DF.loc[v.record_sequence_trial_results['Fraction_positive'] == 0]
-
-        # Generating rejection dataframes
-
-        if v.stringency_flag == 1: # minimal stringency
-            v.FASTA_output_reject_DF = v.FASTA_output_unclean_DF.loc[v.record_sequence_trial_results['Fraction_positive'] == 1]
-        if v.stringency_flag == 2: # moderate stringency
-            v.FASTA_output_reject_DF = v.FASTA_output_unclean_DF.loc[v.record_sequence_trial_results['Fraction_positive'] > 0.5]
-        if v.stringency_flag == 3: # maximal stringency
-            v.FASTA_output_reject_DF = v.FASTA_output_unclean_DF.loc[v.record_sequence_trial_results['Fraction_positive'] != 0]
-
-        # Save clean FASTA file
-
-        self.logger.info('Writing cleaned alignment as FASTA.')
-        self.logger.info(v.FASTA_output_clean_DF)
-        FASTA_output_final_acc_list = v.FASTA_output_clean_DF.loc[:,'Accession'].values.tolist()
-        FASTA_output_final_seq_list = v.FASTA_output_clean_DF.loc[:,'Sequence'].values.tolist()
-
-        ofile = open(v.output_sequence, "w")
-
-        for seqi in range(len(FASTA_output_final_acc_list)):
-            ofile.write(">" + FASTA_output_final_acc_list[seqi] + "\n" + FASTA_output_final_seq_list[seqi] + "\n")
-        ofile.close()
-
-        # Save rejected FASTA file
-
-        self.logger.info('Writing rejected sequences to FASTA.')
-        self.logger.info(v.FASTA_output_reject_DF)
-        FASTA_output_rejected_acc_list = v.FASTA_output_reject_DF.loc[:,'Accession'].values.tolist()
-        FASTA_output_rejected_seq_list = v.FASTA_output_reject_DF.loc[:,'Sequence'].values.tolist()
-
-        ofile = open(v.output_rejected, "w")
-        for seqi in range(len(FASTA_output_rejected_acc_list)):
-            ofile.write(">" + FASTA_output_rejected_acc_list[seqi] + "\n" + FASTA_output_rejected_seq_list[seqi] + "\n")
-        ofile.close()
-
-        # Save analysis file as CSV
+        if p.write_plot_files:
+            self.write_sampling_trials_plot()
 
         v.record_sequence_trial_results['Selected_for_retention'] = ''
         if v.stringency_flag == 1: # minimal stringency
-            v.record_sequence_trial_results['Selected_for_retention'] = np.where(v.record_sequence_trial_results['Fraction_positive'] != 1 ,True,False)
+            v.record_sequence_trial_results['Selected_for_retention'] = np.where(v.record_sequence_trial_results['Fraction_positive'] != 1.0, True, False)
 
         if v.stringency_flag == 2: # moderate stringency
-            v.record_sequence_trial_results['Selected_for_retention'] = np.where(v.record_sequence_trial_results['Fraction_positive'] <= 0.5,True,False)
+            v.record_sequence_trial_results['Selected_for_retention'] = np.where(v.record_sequence_trial_results['Fraction_positive'] <= 0.5, True, False)
 
         if v.stringency_flag == 3: # maximal stringency
-            v.record_sequence_trial_results['Selected_for_retention'] = np.where(v.record_sequence_trial_results['Fraction_positive'] == 0 ,True,False)
+            v.record_sequence_trial_results['Selected_for_retention'] = np.where(v.record_sequence_trial_results['Fraction_positive'] == 0.0, True, False)
 
-        if v.min_trials_for_each_sequence == 1:
-            del v.record_sequence_trial_results['Total_trials']
-            del v.record_sequence_trial_results['Outlier_instances']
-            del v.record_sequence_trial_results['Fraction_positive']
-
-        v.record_sequence_trial_results.to_csv(v.output_tabular,index=False)
+        if p.write_table_files:
+            self.write_output_table()
 
         # Provide total runtime
 
         self.logger.info("Analysis complete.")
         self.logger.info("Total time for analysis: ~ " + str(int(((time.time() - v.start_time))/(1+trial)*v.min_trials_for_each_sequence)) + " seconds.")
 
-        # %%
+        # Return final verdict for each sample
 
+        return {x['Accession']: x['Selected_for_retention'] for x in v.record_sequence_trial_results.to_dict('records')}
 
     def engine(self):
-        """Define the calculation engine"""
-
+        "Define the calculation engine"
         v = self.vars
 
         for counter_x in range(v.table_sample_numpy_rows):
@@ -492,3 +394,140 @@ class SequenceBouncer():
                 v.entropy_array[counter_x, counter_y] = total_entropy_recorded
                 v.entropy_array[counter_y, counter_x] = total_entropy_recorded
         return v.entropy_array
+
+    def write_sequence_files(self):
+        "Save clean and rejected FASTA files"
+        v = self.vars
+
+        # Prepare dataframe to generate FASTA files
+
+        record_seq_convert_to_string = []
+
+        for record in SeqIO.parse(v.input_sequence,"fasta"):
+            record_seq_convert_to_string.append(str(record.seq))
+
+        acc_records_S = pd.Series(v.alignment_record_name_list)
+        sequence_records_S = pd.Series(record_seq_convert_to_string)
+        frame = { 'Accession': acc_records_S, 'Sequence': sequence_records_S }
+        FASTA_output_unclean_DF = pd.DataFrame(frame)
+
+        # Generating clean dataframes
+
+        if v.stringency_flag == 1: # minimal stringency
+            FASTA_output_clean_DF = FASTA_output_unclean_DF.loc[v.record_sequence_trial_results['Fraction_positive'] != 1]
+        if v.stringency_flag == 2: # moderate stringency
+            FASTA_output_clean_DF = FASTA_output_unclean_DF.loc[v.record_sequence_trial_results['Fraction_positive'] <= 0.5]
+        if v.stringency_flag == 3: # maximal stringency
+            FASTA_output_clean_DF = FASTA_output_unclean_DF.loc[v.record_sequence_trial_results['Fraction_positive'] == 0]
+
+        # Generating rejection dataframes
+
+        if v.stringency_flag == 1: # minimal stringency
+            FASTA_output_reject_DF = FASTA_output_unclean_DF.loc[v.record_sequence_trial_results['Fraction_positive'] == 1]
+        if v.stringency_flag == 2: # moderate stringency
+            FASTA_output_reject_DF = FASTA_output_unclean_DF.loc[v.record_sequence_trial_results['Fraction_positive'] > 0.5]
+        if v.stringency_flag == 3: # maximal stringency
+            FASTA_output_reject_DF = FASTA_output_unclean_DF.loc[v.record_sequence_trial_results['Fraction_positive'] != 0]
+
+        # Save clean FASTA file
+
+        self.logger.info('Writing cleaned alignment as FASTA.')
+        self.logger.info(FASTA_output_clean_DF)
+        FASTA_output_final_acc_list = FASTA_output_clean_DF.loc[:,'Accession'].values.tolist()
+        FASTA_output_final_seq_list = FASTA_output_clean_DF.loc[:,'Sequence'].values.tolist()
+
+        with open(v.output_sequence, "w") as ofile:
+            for seqi in range(len(FASTA_output_final_acc_list)):
+                ofile.write(">" + FASTA_output_final_acc_list[seqi] + "\n" + FASTA_output_final_seq_list[seqi] + "\n")
+
+        # Save rejected FASTA file
+
+        self.logger.info('Writing rejected sequences to FASTA.')
+        self.logger.info(FASTA_output_reject_DF)
+        FASTA_output_rejected_acc_list = FASTA_output_reject_DF.loc[:,'Accession'].values.tolist()
+        FASTA_output_rejected_seq_list = FASTA_output_reject_DF.loc[:,'Sequence'].values.tolist()
+
+        with open(v.output_rejected, "w")as ofile:
+            for seqi in range(len(FASTA_output_rejected_acc_list)):
+                ofile.write(">" + FASTA_output_rejected_acc_list[seqi] + "\n" + FASTA_output_rejected_seq_list[seqi] + "\n")
+
+    def write_gap_plot(self):
+        "Plot gap fractions for alignment positions"
+        v = self.vars
+
+        v.gap_record.sort()
+        plotgaplistrange = np.arange(len(v.gap_record))
+        plt.plot(plotgaplistrange, v.gap_record, 'o', ms=1,c='slategrey')
+        plot_cutoff_label = 'Selected gap fraction cut-off: ' + str(v.gap_value_cutoff/100) + ' (' + str(v.gap_value_cutoff) + ' %)'
+        plt.axhline(y=v.gap_value_cutoff/100, color='teal', linestyle='--', label=plot_cutoff_label)
+        rcParams['font.family'] = 'sans-serif'
+        rcParams['font.sans-serif'] = ['Arial']
+        plt.xlabel('Input alignment column (Ordered by gap fraction)', fontsize=12)
+        plt.ylabel('Gap fraction', fontsize=12)
+        plt.legend()
+        plt.savefig(v.output_entry + '_gap_plot.pdf', format="pdf", bbox_inches="tight")
+        self.logger.info('Printed gap distribution of input alignment to file: ' + v.output_entry + '_gap_plot.pdf')
+        plt.close()
+
+    def write_sampling_trials_plot(self):
+        "Plot trial results from sampling-based approach"
+        v = self.vars
+
+        if v.number_in_small_test != v.depth_of_alignment:
+            record_sequence_trial_results_list = v.record_sequence_trial_results['Fraction_positive'].tolist()
+            record_sequence_trial_results_list.sort()
+            plottrialrange = np.arange(len(record_sequence_trial_results_list))
+            plt.plot(plottrialrange, record_sequence_trial_results_list, 'o', ms=1,c='deepskyblue')
+            rcParams['font.family'] = 'sans-serif'
+            rcParams['font.sans-serif'] = ['Arial']
+            plt.xlabel('Sequence', fontsize=12)
+            plt.ylabel('Fraction of times sequence called aberrant (In order of increasing positive calls)', fontsize=12)
+            plt.savefig(v.output_entry + '_sampling_trials_plot.pdf', format="pdf", bbox_inches="tight")
+            self.logger.info('Printed plot of sampling trial results to file: ' + v.output_entry + '_sampling_trials_plot.pdf')
+            plt.close()
+
+    def write_median_plot(self):
+        "Plot comparison values, along with selected cut-off IQR cut-off value for full analysis"
+        v = self.vars
+
+        if v.number_in_small_test == v.depth_of_alignment:
+            v.entropy_DF_analysis_values_list.sort()
+            plotlistrange = np.arange(len(v.entropy_DF_analysis_values_list))
+            plt.plot(plotlistrange, v.entropy_DF_analysis_values_list, 'o', ms=1,c='darkgreen')
+            plot_cutoff_label = 'Selected IQR cut-off:  ' + str(v.multiplier_on_interquartile_range)
+            plt.axhline(y=v.upper_cutoff, color='red', linestyle='--', label=plot_cutoff_label)
+            rcParams['font.family'] = 'sans-serif'
+            rcParams['font.sans-serif'] = ['Arial']
+            plt.xlabel('Sequence', fontsize=12)
+            plt.ylabel('Median across pairwise comparisons (Ordered by median value)', fontsize=12)
+            plt.legend()
+            plt.savefig(v.output_entry + '_median_plot.pdf', format="pdf", bbox_inches="tight")
+            self.logger.info('Printed median values of sequence comparisons from full analysis to file ' + v.output_entry + '_median_plot.pdf')
+            plt.close()
+
+    def write_full_table(self):
+        "Print full distance matrix for analysis and generate a plot only if a single test of all sequences versus all sequences was performed"
+        v = self.vars
+
+        if v.number_in_small_test == v.depth_of_alignment:
+
+            self.logger.info('Cut-off value for median taken across comparisons (full-alignment pairwise analysis): ' + str(round(v.upper_cutoff,1)))
+            v.entropy_DF.sort_index(axis=0,inplace=True,ascending=True)
+            v.entropy_DF.sort_index(axis=1,inplace=True,ascending=True)
+            v.entropy_DF.index = v.alignment_record_name_list
+            v.entropy_DF.columns = v.alignment_record_name_list
+            v.entropy_DF['Median_across_pairwise_comparisons'] = v.entropy_DF.median(axis=1) # add column calculating median across pairwise comparisons
+            first_column = v.entropy_DF.pop('Median_across_pairwise_comparisons')
+            v.entropy_DF.insert(0,'Median_across_pairwise_comparisons',first_column)
+            v.entropy_DF.to_csv(v.output_full_table)
+
+    def write_output_table(self):
+        "Save analysis file as CSV"
+        v = self.vars
+
+        if v.min_trials_for_each_sequence == 1:
+            del v.record_sequence_trial_results['Total_trials']
+            del v.record_sequence_trial_results['Outlier_instances']
+            del v.record_sequence_trial_results['Fraction_positive']
+
+        v.record_sequence_trial_results.to_csv(v.output_tabular,index=False)
