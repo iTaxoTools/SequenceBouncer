@@ -44,6 +44,14 @@ class AttrDict(dict):
         self.__dict__ = self
 
 
+class AllColumnsRemovedAsGaps(Exception):
+    def __init__(self):
+        super().__init__((
+            'All columns were removed as gaps. '
+            'Choose a larger value for --gap_percent_cut to continue.'
+            ))
+
+
 class SequenceBouncer():
     """
     Detect and remove outlier sequences from a multiple sequence alignment.
@@ -213,7 +221,7 @@ class SequenceBouncer():
         if v.entropylist_S_gap_considered.size == 0:
             self.logger.info('All columns were removed as gaps.')
             self.logger.info('Choose a larger value for --gap_percent_cut to continue.')
-            exit()
+            raise AllColumnsRemovedAsGaps()
 
         max_entropy_before_gaps = pd.Series.max(v.entropylist_S)
         self.logger.info('Maximum Shannon entropy alignment score before gap % considered: ' + str(round(max_entropy_before_gaps,2)))
