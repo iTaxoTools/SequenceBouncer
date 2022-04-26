@@ -20,6 +20,7 @@ import random
 import logging
 
 from typing import Dict, Optional, Union
+from io import TextIOWrapper
 from pathlib import Path
 
 import numpy as np
@@ -66,7 +67,7 @@ class SequenceBouncer():
 
     def __init__(
         self,
-        input_file: Union[str, Path],
+        input_file: Union[str, Path, TextIOWrapper],
         output_file: Optional[Union[str, Path]] = None,
         gap_percent_cut: float = 2.0,
         IQR_coefficient: float = 1.0,
@@ -104,60 +105,23 @@ class SequenceBouncer():
         v = self.vars
         p = self.params
 
-        v.input_sequence = p.input_file
-        v.stringency_flag = p.stringency
-        v.min_trials_for_each_sequence = p.trials
-        v.multiplier_on_interquartile_range = p.IQR_coefficient
-        v.number_in_small_test = p.subsample_size
-        v.gap_value_cutoff = p.gap_percent_cut
-        v.output_entry = p.output_file
-        v.seed = p.random_seed or random.randint(0,1000)
-
-        if v.output_entry is None:
-            sep = '.'
-            input_strip = v.input_sequence.split(sep, 1)[0]
-            v.output_entry = input_strip
-            v.output_sequence = input_strip + '_output_clean.fasta'
-            v.output_rejected = input_strip + '_output_rejected.fasta'
-            v.output_tabular = input_strip + '_output_analysis.csv'
-            v.output_full_table = input_strip + '_full_comparison_table.csv'
-        elif v.output_entry is not None:
-            v.output_sequence = v.output_entry + '_output_clean.fasta'
-            v.output_rejected = v.output_entry + '_output_rejected.fasta'
-            v.output_tabular = v.output_entry + '_output_analysis.csv'
-            v.output_full_table = v.output_entry + '_full_comparison_table.csv'
-
-        # Logging to instance file
-
-        self.logger = logger.getChild(str(id(self)))
-
-        if p.write_log_file:
-            log_file = logging.FileHandler(v.output_entry + '_output.log')
-            self.logger.addHandler(log_file)
-
-        self.logger.info('\nSequenceBouncer: A method to remove outlier entries from a multiple sequence alignment\n')
-        self.logger.info('Cory Dunn')
-        self.logger.info('University of Helsinki')
-        self.logger.info('cory.dunn@helsinki.fi')
-        self.logger.info('Version: ' + version)
-        self.logger.info('Please cite DOI: 10.1101/2020.11.24.395459')
-        self.logger.info('___\n')
-
-        # Start timer
-
         v.start_time = time.time()
 
         # Initialize
 
+        self.parse_params()
+
+        self.initialize_logger()
+
         self.parse_input()
 
+        # Prepare dataframe for storage of trial results (these columns are stripped away later if only one trial is performed)
+
         v.record_sequence_trial_results = pd.DataFrame(v.alignment_record_name_list, columns=['Accession'])
+        v.record_sequence_trial_results['Total_trials'] = 0
+        v.record_sequence_trial_results['Outlier_instances'] = 0
 
-        if v.number_in_small_test == 0:
-            v.number_in_small_test = v.depth_of_alignment
-
-        if v.number_in_small_test == v.depth_of_alignment:
-            v.min_trials_for_each_sequence = 1
+        # Print input summary
 
         self.logger.info("Analyzing '" + v.input_sequence + "'.")
         self.logger.info('Flags are --IQR_coefficient: ' + str(v.multiplier_on_interquartile_range) + ', -subsample_size: ' + str(v.number_in_small_test) + ', --gap_percent_cut: ' + str(v.gap_value_cutoff))
@@ -228,19 +192,10 @@ class SequenceBouncer():
             self.logger.warning('   A sampling-based approach may be considered.')
             self.logger.warning('   For a sampling-based approach, take advantage of the -n, -t, and -s flags.\n')
 
-        # Clear out unused items from memory
+        # Clear out used items from memory
 
         del v.sequence_dataframe
         gc.collect()
-
-        # Prepare dataframe for storage of trial results (these columns are stripped away later if only one trial is performed)
-
-        v.record_sequence_trial_results['Total_trials'] = 0
-        v.record_sequence_trial_results['Outlier_instances'] = 0
-
-        # Set trial counter
-
-        self.logger.info('Beginning sequence trials.')
 
         # Avoid empty source dataframe
 
@@ -249,6 +204,9 @@ class SequenceBouncer():
         else:
             v.times_to_sample_max_keep = (v.depth_of_alignment//v.number_in_small_test) + 1
 
+        # Enter trial loop
+
+        self.logger.info('Beginning sequence trials.')
 
         for trial in range(v.min_trials_for_each_sequence):
 
@@ -358,6 +316,55 @@ class SequenceBouncer():
 
         return {x['Accession']: x['Selected_for_retention'] for x in v.record_sequence_trial_results.to_dict('records')}
 
+    def initialize_logger(self):
+        "Also adds file handler if required"
+        v = self.vars
+        p = self.params
+
+        self.logger = logger.getChild(str(id(self)))
+        if p.write_log_file:
+            log_file = logging.FileHandler(v.output_entry + '_output.log')
+            self.logger.addHandler(log_file)
+
+        # Print header
+
+        self.logger.info('\nSequenceBouncer: A method to remove outlier entries from a multiple sequence alignment\n')
+        self.logger.info('Cory Dunn')
+        self.logger.info('University of Helsinki')
+        self.logger.info('cory.dunn@helsinki.fi')
+        self.logger.info('Version: ' + version)
+        self.logger.info('Please cite DOI: 10.1101/2020.11.24.395459')
+        self.logger.info('___\n')
+
+
+    def parse_params(self):
+        "Parse parameters passed to class constructor"
+        v = self.vars
+        p = self.params
+
+        v.input_sequence = p.input_file
+        v.stringency_flag = p.stringency
+        v.min_trials_for_each_sequence = p.trials
+        v.multiplier_on_interquartile_range = p.IQR_coefficient
+        v.number_in_small_test = p.subsample_size
+        v.gap_value_cutoff = p.gap_percent_cut
+        v.output_entry = p.output_file
+        v.seed = p.random_seed or random.randint(0,1000)
+
+        if v.output_entry is None:
+            sep = '.'
+            input_strip = v.input_sequence.split(sep, 1)[0]
+            v.output_entry = input_strip
+            v.output_sequence = input_strip + '_output_clean.fasta'
+            v.output_rejected = input_strip + '_output_rejected.fasta'
+            v.output_tabular = input_strip + '_output_analysis.csv'
+            v.output_full_table = input_strip + '_full_comparison_table.csv'
+        elif v.output_entry is not None:
+            v.output_sequence = v.output_entry + '_output_clean.fasta'
+            v.output_rejected = v.output_entry + '_output_rejected.fasta'
+            v.output_tabular = v.output_entry + '_output_analysis.csv'
+            v.output_full_table = v.output_entry + '_full_comparison_table.csv'
+
     def parse_input(self):
         "Parse all input sequences"
         v = self.vars
@@ -369,7 +376,7 @@ class SequenceBouncer():
         v.record_seq_convert_to_string = []
         sequence_records = []
 
-        for record in SeqIO.parse(v.input_sequence,"fasta"):
+        for record in SeqIO.parse(v.input_sequence, "fasta"):
             v.alignment_record_name_list.append(record.name)
 
             # Prepare dataframe to generate FASTA files
@@ -384,12 +391,20 @@ class SequenceBouncer():
             record_x_toward_seq_dataframe_ASCII = [ord(x) for x in record_x_toward_seq_dataframe_lower]
             sequence_records.append(record_x_toward_seq_dataframe_ASCII)
 
-        v.depth_of_alignment = len(v.alignment_record_name_list)
-        v.length_of_alignment = len(record.seq)
-
         # Generate dataframe of alignment from list
 
         v.sequence_dataframe = pd.DataFrame(sequence_records, dtype='int8')
+
+        # Update input information
+
+        v.depth_of_alignment = len(v.alignment_record_name_list)
+        v.length_of_alignment = len(record.seq)
+
+        if v.number_in_small_test == 0:
+            v.number_in_small_test = v.depth_of_alignment
+
+        if v.number_in_small_test == v.depth_of_alignment:
+            v.min_trials_for_each_sequence = 1
 
     def engine(self):
         "Define the calculation engine"
