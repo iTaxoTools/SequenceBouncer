@@ -19,7 +19,7 @@ import gc
 import random
 import logging
 
-from typing import Dict, Optional, Union
+from typing import Dict, Iterator, Optional, Union
 from io import TextIOWrapper
 from pathlib import Path
 
@@ -31,6 +31,7 @@ from matplotlib import rcParams
 from matplotlib.backends.backend_pdf import PdfPages
 from Bio import AlignIO, SeqIO
 from Bio.Align import AlignInfo
+from Bio.SeqRecord import SeqRecord
 
 
 # Logging to console
@@ -51,12 +52,30 @@ class AttrDict(dict):
         self.__dict__ = self
 
 
+class InvalidInput(Exception):
+    def __init__(self):
+        super().__init__(
+            'Input must be of type: str, Path, TextIOWrapper or InputSequence.')
+
+
 class AllColumnsRemovedAsGaps(Exception):
     def __init__(self):
         super().__init__((
             'All columns were removed as gaps. '
             'Choose a larger value for --gap_percent_cut to continue.'
             ))
+
+
+class InputSequence:
+    def __init__(self, name: str, iterator: Iterator[SeqRecord]):
+        self.name = name
+        self.iterator = iterator
+
+    def __iter__(self):
+        return (record for record in self.iterator)
+
+    def __next__(self):
+        return next(self.iterator)
 
 
 class SequenceBouncer():
@@ -67,7 +86,7 @@ class SequenceBouncer():
 
     def __init__(
         self,
-        input_file: Union[str, Path, TextIOWrapper],
+        input: Union[str, Path, TextIOWrapper],
         output_file: Optional[Union[str, Path]] = None,
         gap_percent_cut: float = 2.0,
         IQR_coefficient: float = 1.0,
@@ -79,11 +98,13 @@ class SequenceBouncer():
         write_sequence_files: bool = True,
         write_table_files: bool = True,
         write_plot_files: bool = True,
+        write_none: bool = False,
+        input_format: str = 'fasta',
     ):
 
         self.vars = AttrDict()
         self.params = AttrDict(
-            input_file=input_file,
+            input=input,
             output_file=output_file,
             gap_percent_cut=gap_percent_cut,
             IQR_coefficient=IQR_coefficient,
@@ -95,6 +116,8 @@ class SequenceBouncer():
             write_sequence_files=write_sequence_files,
             write_table_files=write_table_files,
             write_plot_files=write_plot_files,
+            write_none=write_none,
+            input_format=input_format,
         )
 
     def __call__(self) -> Dict[str, bool]:
@@ -123,7 +146,7 @@ class SequenceBouncer():
 
         # Print input summary
 
-        self.logger.info("Analyzing '" + v.input_sequence + "'.")
+        self.logger.info("Analyzing '" + v.input_name + "'.")
         self.logger.info('Flags are --IQR_coefficient: ' + str(v.multiplier_on_interquartile_range) + ', -subsample_size: ' + str(v.number_in_small_test) + ', --gap_percent_cut: ' + str(v.gap_value_cutoff))
         if v.min_trials_for_each_sequence != 1:
             self.logger.info('          --stringency: ' + str(v.stringency_flag) + ', --trials: ' + str(v.min_trials_for_each_sequence) + ', --random_seed: ' + str(v.seed))
@@ -336,13 +359,23 @@ class SequenceBouncer():
         self.logger.info('Please cite DOI: 10.1101/2020.11.24.395459')
         self.logger.info('___\n')
 
-
     def parse_params(self):
         "Parse parameters passed to class constructor"
         v = self.vars
         p = self.params
 
-        v.input_sequence = p.input_file
+        if isinstance(p.input, InputSequence):
+            v.input_name = p.input.name
+            v.input_sequence = iter(p.input)
+        elif isinstance(p.input, str) or isinstance(p.input, Path):
+            v.input_name = str(Path(p.input))
+            v.input_sequence = SeqIO.parse(p.input, p.input_format)
+        elif isinstance(p.input, TextIOWrapper):
+            v.input_name = p.input.name
+            v.input_sequence = SeqIO.parse(p.input, p.input_format)
+        else:
+            raise InvalidInput()
+
         v.stringency_flag = p.stringency
         v.min_trials_for_each_sequence = p.trials
         v.multiplier_on_interquartile_range = p.IQR_coefficient
@@ -353,17 +386,18 @@ class SequenceBouncer():
 
         if v.output_entry is None:
             sep = '.'
-            input_strip = v.input_sequence.split(sep, 1)[0]
+            input_strip = v.input_name.split(sep, 1)[0]
             v.output_entry = input_strip
-            v.output_sequence = input_strip + '_output_clean.fasta'
-            v.output_rejected = input_strip + '_output_rejected.fasta'
-            v.output_tabular = input_strip + '_output_analysis.csv'
-            v.output_full_table = input_strip + '_full_comparison_table.csv'
-        elif v.output_entry is not None:
-            v.output_sequence = v.output_entry + '_output_clean.fasta'
-            v.output_rejected = v.output_entry + '_output_rejected.fasta'
-            v.output_tabular = v.output_entry + '_output_analysis.csv'
-            v.output_full_table = v.output_entry + '_full_comparison_table.csv'
+        v.output_sequence = input_strip + '_output_clean.fasta'
+        v.output_rejected = input_strip + '_output_rejected.fasta'
+        v.output_tabular = input_strip + '_output_analysis.csv'
+        v.output_full_table = input_strip + '_full_comparison_table.csv'
+
+        if p.write_none:
+            p.write_log_file = False
+            p.write_sequence_files = False
+            p.write_table_files = False
+            p.write_plot_files = False
 
     def parse_input(self):
         "Parse all input sequences"
@@ -376,7 +410,8 @@ class SequenceBouncer():
         v.record_seq_convert_to_string = []
         sequence_records = []
 
-        for record in SeqIO.parse(v.input_sequence, "fasta"):
+        for record in v.input_sequence:
+
             v.alignment_record_name_list.append(record.name)
 
             # Prepare dataframe to generate FASTA files

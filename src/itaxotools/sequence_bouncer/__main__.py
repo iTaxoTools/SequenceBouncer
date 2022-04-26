@@ -22,6 +22,9 @@ def main():
     ap.add_argument('-r','--random_seed',required=False,type=int,default=None,help='Random seed (integer) to be used during a sampling-based approach (default is that the seed is randomly selected). The user can use this seed to obtain reproducible output and should note it in their publications. \n')
     args = vars(ap.parse_args())
 
+    args['input'] = args['input_file']
+    del args['input_file']
+
     SequenceBouncer(**args)()
 
 

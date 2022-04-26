@@ -1,6 +1,17 @@
 #!/usr/bin/env python3
 
-from .SequenceBouncer import SequenceBouncer, AllColumnsRemovedAsGaps, version
+from .SequenceBouncer import (
+    SequenceBouncer,
+    InputSequence,
+    InvalidInput,
+    AllColumnsRemovedAsGaps,
+    version
+    )
 
-__all__ = ['SequenceBouncer', 'AllColumnsRemovedAsGaps']
 __version__ = f'{version}.1'
+__all__ = [
+    'SequenceBouncer',
+    'InputSequence',
+    'InvalidInput',
+    'AllColumnsRemovedAsGaps'
+    ]
