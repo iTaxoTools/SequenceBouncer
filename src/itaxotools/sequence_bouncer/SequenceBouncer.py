@@ -143,12 +143,7 @@ class SequenceBouncer():
 
         # Initialize
 
-        v.alignment_record_name_list = []
-
-        for record in SeqIO.parse(v.input_sequence,"fasta"):
-                v.alignment_record_name_list.append(record.name)
-
-        v.depth_of_alignment = (len(v.alignment_record_name_list))
+        self.parse_input()
 
         v.record_sequence_trial_results = pd.DataFrame(v.alignment_record_name_list, columns=['Accession'])
 
@@ -163,27 +158,8 @@ class SequenceBouncer():
         if v.min_trials_for_each_sequence != 1:
             self.logger.info('          --stringency: ' + str(v.stringency_flag) + ', --trials: ' + str(v.min_trials_for_each_sequence) + ', --random_seed: ' + str(v.seed))
 
-        v.length_of_alignment = len(list(record.seq))
-
         self.logger.info('Input alignment length is: ' + str(v.length_of_alignment) + ' characters.')
         self.logger.info("Input alignment depth is: " + str(v.depth_of_alignment) + " sequences.")
-
-        # Load sequences from alignment into list and control case
-
-        self.logger.info('Generating sequence dataframe.')
-
-        v.sequence_records = []
-
-        for record_x in SeqIO.parse(v.input_sequence,"fasta"):
-            record_x_toward_seq_dataframe = list(record_x.seq)
-            record_x_toward_seq_dataframe_lower = [x.lower() for x in record_x_toward_seq_dataframe]
-            record_x_toward_seq_dataframe_ASCII = [ord(x) for x in record_x_toward_seq_dataframe_lower]
-            v.sequence_records.append(record_x_toward_seq_dataframe_ASCII)
-
-        # Generate dataframe of alignment from list
-
-        v.sequence_dataframe = pd.DataFrame(v.sequence_records)
-        v.sequence_dataframe = v.sequence_dataframe.astype('int8')
 
         # Calculate Shannon entropy and fraction of column gapped
 
@@ -248,7 +224,6 @@ class SequenceBouncer():
 
         # Clear out unused items from memory
 
-        del v.sequence_records
         del v.sequence_dataframe
         gc.collect()
 
@@ -377,6 +352,39 @@ class SequenceBouncer():
 
         return {x['Accession']: x['Selected_for_retention'] for x in v.record_sequence_trial_results.to_dict('records')}
 
+    def parse_input(self):
+        "Parse all input sequences"
+        v = self.vars
+        p = self.params
+
+        self.logger.info('Generating sequence dataframe.')
+
+        v.alignment_record_name_list = []
+        v.record_seq_convert_to_string = []
+        sequence_records = []
+
+        for record in SeqIO.parse(v.input_sequence,"fasta"):
+            v.alignment_record_name_list.append(record.name)
+
+            # Prepare dataframe to generate FASTA files
+
+            if p.write_sequence_files:
+                v.record_seq_convert_to_string.append(str(record.seq))
+
+            # Load sequences from alignment into list and control case
+
+            record_x_toward_seq_dataframe = list(record.seq)
+            record_x_toward_seq_dataframe_lower = [x.lower() for x in record_x_toward_seq_dataframe]
+            record_x_toward_seq_dataframe_ASCII = [ord(x) for x in record_x_toward_seq_dataframe_lower]
+            sequence_records.append(record_x_toward_seq_dataframe_ASCII)
+
+        v.depth_of_alignment = len(v.alignment_record_name_list)
+        v.length_of_alignment = len(record.seq)
+
+        # Generate dataframe of alignment from list
+
+        v.sequence_dataframe = pd.DataFrame(sequence_records, dtype='int8')
+
     def engine(self):
         "Define the calculation engine"
         v = self.vars
@@ -407,15 +415,8 @@ class SequenceBouncer():
         "Save clean and rejected FASTA files"
         v = self.vars
 
-        # Prepare dataframe to generate FASTA files
-
-        record_seq_convert_to_string = []
-
-        for record in SeqIO.parse(v.input_sequence,"fasta"):
-            record_seq_convert_to_string.append(str(record.seq))
-
         acc_records_S = pd.Series(v.alignment_record_name_list)
-        sequence_records_S = pd.Series(record_seq_convert_to_string)
+        sequence_records_S = pd.Series(v.record_seq_convert_to_string)
         frame = { 'Accession': acc_records_S, 'Sequence': sequence_records_S }
         FASTA_output_unclean_DF = pd.DataFrame(frame)
 
