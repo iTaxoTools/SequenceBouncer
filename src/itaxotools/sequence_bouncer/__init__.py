@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 
-__all__ = ['SequenceBouncer', 'AllColumnsRemovedAsGaps']
+from .SequenceBouncer import SequenceBouncer, AllColumnsRemovedAsGaps, version
 
-from .SequenceBouncer import SequenceBouncer, AllColumnsRemovedAsGaps
+__all__ = ['SequenceBouncer', 'AllColumnsRemovedAsGaps']
+__version__ = f'{version}.1'

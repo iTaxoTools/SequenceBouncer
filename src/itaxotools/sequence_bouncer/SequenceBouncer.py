@@ -9,21 +9,27 @@
 version = '1.23'
 # License: GPLv3
 
+# Modified for iTaxoTools by Stefanos Patmanidis
 
-from Bio import AlignIO
-from Bio.Align import AlignInfo
-from Bio import SeqIO
-import pandas as pd
-import numpy as np
+
 import time
 import sys
 import math
 import gc
 import random
 import logging
+
+from typing import Dict, Optional, Union
+from pathlib import Path
+
+import numpy as np
+import pandas as pd
 import matplotlib.pyplot as plt
+
 from matplotlib import rcParams
 from matplotlib.backends.backend_pdf import PdfPages
+from Bio import AlignIO, SeqIO
+from Bio.Align import AlignInfo
 
 
 # Logging to console
@@ -60,18 +66,18 @@ class SequenceBouncer():
 
     def __init__(
         self,
-        input_file,
-        output_file=None,
-        gap_percent_cut=2.0,
-        IQR_coefficient=1.0,
-        subsample_size=0,
-        trials=1,
-        stringency=2,
-        random_seed=None,
-        write_log_file=True,
-        write_sequence_files=True,
-        write_table_files=True,
-        write_plot_files=True,
+        input_file: Union[str, Path],
+        output_file: Optional[Union[str, Path]] = None,
+        gap_percent_cut: float = 2.0,
+        IQR_coefficient: float = 1.0,
+        subsample_size: int = 0,
+        trials: int = 1,
+        stringency: int = 2,
+        random_seed: int = None,
+        write_log_file: bool = True,
+        write_sequence_files: bool = True,
+        write_table_files: bool = True,
+        write_plot_files: bool = True,
     ):
 
         self.vars = AttrDict()
@@ -90,7 +96,7 @@ class SequenceBouncer():
             write_plot_files=write_plot_files,
         )
 
-    def __call__(self):
+    def __call__(self) -> Dict[str, bool]:
         """
         Returns a dictionary where the keys are the sequence names,
         and the values are True if accepted and False for outliers.
