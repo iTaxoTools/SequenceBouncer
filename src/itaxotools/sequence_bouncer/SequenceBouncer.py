@@ -26,6 +26,18 @@ from matplotlib import rcParams
 from matplotlib.backends.backend_pdf import PdfPages
 
 
+# Logging to console
+
+stream = logging.StreamHandler()
+stream.setLevel(logging.INFO)
+streamformat = logging.Formatter("%(message)s")
+stream.setFormatter(streamformat)
+
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
+logger.addHandler(stream)
+
+
 class AttrDict(dict):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -48,6 +60,7 @@ class SequenceBouncer():
         trials=1,
         stringency=2,
         random_seed=None,
+        write_log_file=True,
     ):
 
         self.vars = AttrDict()
@@ -60,6 +73,7 @@ class SequenceBouncer():
             trials=trials,
             stringency=stringency,
             random_seed=random_seed,
+            write_log_file=write_log_file,
         )
 
     def __call__(self):
@@ -90,27 +104,21 @@ class SequenceBouncer():
             v.output_tabular = v.output_entry + '_output_analysis.csv'
             v.output_full_table = v.output_entry + '_full_comparison_table.csv'
 
+        # Logging to instance file
 
-        # Logging and streaming to console, NOT thread-safe!
+        self.logger = logger.getChild(str(id(self)))
 
-        v.mylogs = logging.getLogger(__name__)
-        v.mylogs.setLevel(logging.INFO)
-        stream = logging.StreamHandler()
-        stream.setLevel(logging.INFO)
-        streamformat = logging.Formatter("%(message)s")
-        stream.setFormatter(streamformat)
-        v.mylogs.addHandler(stream)
+        if p.write_log_file:
+            log_file = logging.FileHandler(v.output_entry + '_output.log')
+            self.logger.addHandler(log_file)
 
-        file = logging.FileHandler(v.output_entry + '_output.log')
-        v.mylogs.addHandler(file)
-
-        v.mylogs.info('\nSequenceBouncer: A method to remove outlier entries from a multiple sequence alignment\n')
-        v.mylogs.info('Cory Dunn')
-        v.mylogs.info('University of Helsinki')
-        v.mylogs.info('cory.dunn@helsinki.fi')
-        v.mylogs.info('Version: ' + version)
-        v.mylogs.info('Please cite DOI: 10.1101/2020.11.24.395459')
-        v.mylogs.info('___\n')
+        self.logger.info('\nSequenceBouncer: A method to remove outlier entries from a multiple sequence alignment\n')
+        self.logger.info('Cory Dunn')
+        self.logger.info('University of Helsinki')
+        self.logger.info('cory.dunn@helsinki.fi')
+        self.logger.info('Version: ' + version)
+        self.logger.info('Please cite DOI: 10.1101/2020.11.24.395459')
+        self.logger.info('___\n')
 
         # Start timer
 
@@ -133,19 +141,19 @@ class SequenceBouncer():
         if v.number_in_small_test == v.depth_of_alignment:
             v.min_trials_for_each_sequence = 1
 
-        v.mylogs.info("Analyzing '" + v.input_sequence + "'.")
-        v.mylogs.info('Flags are --IQR_coefficient: ' + str(v.multiplier_on_interquartile_range) + ', -subsample_size: ' + str(v.number_in_small_test) + ', --gap_percent_cut: ' + str(v.gap_value_cutoff))
+        self.logger.info("Analyzing '" + v.input_sequence + "'.")
+        self.logger.info('Flags are --IQR_coefficient: ' + str(v.multiplier_on_interquartile_range) + ', -subsample_size: ' + str(v.number_in_small_test) + ', --gap_percent_cut: ' + str(v.gap_value_cutoff))
         if v.min_trials_for_each_sequence != 1:
-            v.mylogs.info('          --stringency: ' + str(v.stringency_flag) + ', --trials: ' + str(v.min_trials_for_each_sequence) + ', --random_seed: ' + str(v.seed))
+            self.logger.info('          --stringency: ' + str(v.stringency_flag) + ', --trials: ' + str(v.min_trials_for_each_sequence) + ', --random_seed: ' + str(v.seed))
 
         v.length_of_alignment = len(list(record.seq))
 
-        v.mylogs.info('Input alignment length is: ' + str(v.length_of_alignment) + ' characters.')
-        v.mylogs.info("Input alignment depth is: " + str(v.depth_of_alignment) + " sequences.")
+        self.logger.info('Input alignment length is: ' + str(v.length_of_alignment) + ' characters.')
+        self.logger.info("Input alignment depth is: " + str(v.depth_of_alignment) + " sequences.")
 
         # Load sequences from alignment into list and control case
 
-        v.mylogs.info('Generating sequence dataframe.')
+        self.logger.info('Generating sequence dataframe.')
 
         v.sequence_records = []
 
@@ -162,7 +170,7 @@ class SequenceBouncer():
 
         # Calculate Shannon entropy and fraction of column gapped
 
-        v.mylogs.info('Calculating Shannon entropy values and gap metrics across all input sequences.')
+        self.logger.info('Calculating Shannon entropy values and gap metrics across all input sequences.')
         v.entropy_record = []
         v.gap_record = []
         sequence_columns = len(v.sequence_dataframe.axes[1])
@@ -193,7 +201,7 @@ class SequenceBouncer():
         plt.ylabel('Gap fraction', fontsize=12)
         plt.legend()
         plt.savefig(v.output_entry + '_gap_plot.pdf', format="pdf", bbox_inches="tight")
-        v.mylogs.info('Printed gap distribution of input alignment to file: ' + v.output_entry + '_gap_plot.pdf')
+        self.logger.info('Printed gap distribution of input alignment to file: ' + v.output_entry + '_gap_plot.pdf')
         plt.close()
 
         # Generate boolean based upon gap values
@@ -207,32 +215,32 @@ class SequenceBouncer():
         v.entropylist_S_gap_considered = v.entropylist_S.drop(v.gap_percent_bool_index_remove)
 
         if v.entropylist_S_gap_considered.size == 0:
-            v.mylogs.info('All columns were removed as gaps.')
-            v.mylogs.info('Choose a larger value for --gap_percent_cut to continue.')
+            self.logger.info('All columns were removed as gaps.')
+            self.logger.info('Choose a larger value for --gap_percent_cut to continue.')
             exit()
 
         max_entropy_before_gaps = pd.Series.max(v.entropylist_S)
-        v.mylogs.info('Maximum Shannon entropy alignment score before gap % considered: ' + str(round(max_entropy_before_gaps,2)))
+        self.logger.info('Maximum Shannon entropy alignment score before gap % considered: ' + str(round(max_entropy_before_gaps,2)))
         v.max_entropy_after_gaps = pd.Series.max(v.entropylist_S_gap_considered)
-        v.mylogs.info('Maximum Shannon entropy alignment score after gap % considered: ' + str(round(v.max_entropy_after_gaps,2)))
+        self.logger.info('Maximum Shannon entropy alignment score after gap % considered: ' + str(round(v.max_entropy_after_gaps,2)))
 
         v.entropy_record_numpy = v.entropylist_S_gap_considered.to_numpy()
         v.entropy_record_numpy.shape = (-1,len(v.entropylist_S_gap_considered))
-        v.mylogs.info('Removing gapped positions from analysis set.')
+        self.logger.info('Removing gapped positions from analysis set.')
         v.sequence_dataframe_gap_considered = v.sequence_dataframe.drop(v.gap_percent_bool_index_remove,axis=1)
-        v.mylogs.info("Elapsed time: ~ " + str(int(time.time() - v.start_time)) + " seconds.")
-        v.mylogs.info('Alignment positions analyzed after ' + str(v.gap_value_cutoff) + '% gap cutoff: ' + str(v.length_of_alignment-len(v.gap_percent_bool_index_remove)))
+        self.logger.info("Elapsed time: ~ " + str(int(time.time() - v.start_time)) + " seconds.")
+        self.logger.info('Alignment positions analyzed after ' + str(v.gap_value_cutoff) + '% gap cutoff: ' + str(v.length_of_alignment-len(v.gap_percent_bool_index_remove)))
 
-        v.mylogs.info('Preparing sequences for comparison.')
+        self.logger.info('Preparing sequences for comparison.')
 
         # Comparison time warning
 
         comparison_time_full_table_seconds = v.depth_of_alignment * v.depth_of_alignment * (v.length_of_alignment-len(v.gap_percent_bool_index_remove)) * 3.14E-8
         if comparison_time_full_table_seconds > 1800 and v.number_in_small_test == v.depth_of_alignment:
-            v.mylogs.info('\n***WARNING: An input alignment of this size may take a considerable amount of time')
-            v.mylogs.info('   if all pairwise sequence comparisons are performed.')
-            v.mylogs.info('   A sampling-based approach may be considered.')
-            v.mylogs.info('   For a sampling-based approach, take advantage of the -n, -t, and -s flags.\n')
+            self.logger.info('\n***WARNING: An input alignment of this size may take a considerable amount of time')
+            self.logger.info('   if all pairwise sequence comparisons are performed.')
+            self.logger.info('   A sampling-based approach may be considered.')
+            self.logger.info('   For a sampling-based approach, take advantage of the -n, -t, and -s flags.\n')
 
         # Clear out unused items from memory
 
@@ -247,7 +255,7 @@ class SequenceBouncer():
 
         # Set trial counter
 
-        v.mylogs.info('Beginning sequence trials.')
+        self.logger.info('Beginning sequence trials.')
 
         # Avoid empty source dataframe
 
@@ -260,14 +268,14 @@ class SequenceBouncer():
         for trial in range(v.min_trials_for_each_sequence):
 
             if v.min_trials_for_each_sequence > 1:
-                v.mylogs.info("Trial: " + str(trial+1) + " of " + str(v.min_trials_for_each_sequence))
+                self.logger.info("Trial: " + str(trial+1) + " of " + str(v.min_trials_for_each_sequence))
 
             v.sequence_dataframe_gap_considered = v.sequence_dataframe_gap_considered.sample(frac=1,random_state = v.seed) # shuffle master sequence dataframe, use user-defined or standard random seed
             v.sequence_dataframe_gap_considered_max_keep = v.sequence_dataframe_gap_considered # copy shuffled version for work below
 
             for j in range(v.times_to_sample_max_keep):
                 if v.number_in_small_test != v.depth_of_alignment and (j+1)//50 == (j+1)/50:
-                    v.mylogs.info('\rSample: '+str((j+1)) + ' of ' +str(v.times_to_sample_max_keep) + ' | Trial: ' + str(trial+1))
+                    self.logger.info('\rSample: '+str((j+1)) + ' of ' +str(v.times_to_sample_max_keep) + ' | Trial: ' + str(trial+1))
                 max_times_tested = v.record_sequence_trial_results['Total_trials'].max()
 
                 if max_times_tested > trial:
@@ -334,7 +342,7 @@ class SequenceBouncer():
                     plt.ylabel('Median across pairwise comparisons (Ordered by median value)', fontsize=12)
                     plt.legend()
                     plt.savefig(v.output_entry + '_median_plot.pdf', format="pdf", bbox_inches="tight")
-                    v.mylogs.info('Printed median values of sequence comparisons from full analysis to file ' + v.output_entry + '_median_plot.pdf')
+                    self.logger.info('Printed median values of sequence comparisons from full analysis to file ' + v.output_entry + '_median_plot.pdf')
                     plt.close()
 
         # Identify the outlier sequences using the interquartile range cutoff
@@ -343,14 +351,14 @@ class SequenceBouncer():
                 entropy_median_too_high = entropy_DF_analysis_above_cutoff.loc[entropy_DF_analysis_above_cutoff['Median'] == True]
                 v.record_sequence_trial_results.loc[entropy_median_too_high.index,'Outlier_instances'] += 1
 
-            v.mylogs.info("Elapsed time: ~ " + str(int(time.time() - v.start_time)) + " seconds.")
-            v.mylogs.info("Estimated total time for analysis: ~ " + str(int(((time.time() - v.start_time))/(1+trial)*v.min_trials_for_each_sequence)) + " seconds.")
+            self.logger.info("Elapsed time: ~ " + str(int(time.time() - v.start_time)) + " seconds.")
+            self.logger.info("Estimated total time for analysis: ~ " + str(int(((time.time() - v.start_time))/(1+trial)*v.min_trials_for_each_sequence)) + " seconds.")
 
         # Print full distance matrix for analysis and generate a plot only if a single test of all sequences versus all sequences was performed
 
         if v.number_in_small_test == v.depth_of_alignment:
 
-            v.mylogs.info('Cut-off value for median taken across comparisons (full-alignment pairwise analysis): ' + str(round(v.upper_cutoff,1)))
+            self.logger.info('Cut-off value for median taken across comparisons (full-alignment pairwise analysis): ' + str(round(v.upper_cutoff,1)))
             v.entropy_DF.sort_index(axis=0,inplace=True,ascending=True)
             v.entropy_DF.sort_index(axis=1,inplace=True,ascending=True)
             v.entropy_DF.index = v.alignment_record_name_list
@@ -385,7 +393,7 @@ class SequenceBouncer():
             plt.xlabel('Sequence', fontsize=12)
             plt.ylabel('Fraction of times sequence called aberrant (In order of increasing positive calls)', fontsize=12)
             plt.savefig(v.output_entry + '_sampling_trials_plot.pdf', format="pdf", bbox_inches="tight")
-            v.mylogs.info('Printed plot of sampling trial results to file: ' + v.output_entry + '_sampling_trials_plot.pdf')
+            self.logger.info('Printed plot of sampling trial results to file: ' + v.output_entry + '_sampling_trials_plot.pdf')
             plt.close()
 
         # Generating clean dataframes
@@ -408,8 +416,8 @@ class SequenceBouncer():
 
         # Save clean FASTA file
 
-        v.mylogs.info('Writing cleaned alignment as FASTA.')
-        v.mylogs.info(v.FASTA_output_clean_DF)
+        self.logger.info('Writing cleaned alignment as FASTA.')
+        self.logger.info(v.FASTA_output_clean_DF)
         FASTA_output_final_acc_list = v.FASTA_output_clean_DF.loc[:,'Accession'].values.tolist()
         FASTA_output_final_seq_list = v.FASTA_output_clean_DF.loc[:,'Sequence'].values.tolist()
 
@@ -421,8 +429,8 @@ class SequenceBouncer():
 
         # Save rejected FASTA file
 
-        v.mylogs.info('Writing rejected sequences to FASTA.')
-        v.mylogs.info(v.FASTA_output_reject_DF)
+        self.logger.info('Writing rejected sequences to FASTA.')
+        self.logger.info(v.FASTA_output_reject_DF)
         FASTA_output_rejected_acc_list = v.FASTA_output_reject_DF.loc[:,'Accession'].values.tolist()
         FASTA_output_rejected_seq_list = v.FASTA_output_reject_DF.loc[:,'Sequence'].values.tolist()
 
@@ -452,8 +460,8 @@ class SequenceBouncer():
 
         # Provide total runtime
 
-        v.mylogs.info("Analysis complete.")
-        v.mylogs.info("Total time for analysis: ~ " + str(int(((time.time() - v.start_time))/(1+trial)*v.min_trials_for_each_sequence)) + " seconds.")
+        self.logger.info("Analysis complete.")
+        self.logger.info("Total time for analysis: ~ " + str(int(((time.time() - v.start_time))/(1+trial)*v.min_trials_for_each_sequence)) + " seconds.")
 
         # %%
 
@@ -466,11 +474,11 @@ class SequenceBouncer():
         for counter_x in range(v.table_sample_numpy_rows):
             counter_x_numpy_row = v.table_sample_numpy[counter_x:(counter_x+1),:]
             if v.depth_of_alignment < 1000 and ((counter_x+1)/25) == ((counter_x+1)//25):
-                v.mylogs.info('\rSequences analyzed: '+str(counter_x+1))
+                self.logger.info('\rSequences analyzed: '+str(counter_x+1))
             elif v.depth_of_alignment < 10000 and ((counter_x+1)/250) == ((counter_x+1)//250):
-                v.mylogs.info('\rSequences analyzed: '+str(counter_x+1))
+                self.logger.info('\rSequences analyzed: '+str(counter_x+1))
             elif v.depth_of_alignment < 100000 and ((counter_x+1)/2500) == ((counter_x+1)//2500):
-                v.mylogs.info('\rSequences analyzed: '+str(counter_x+1))
+                self.logger.info('\rSequences analyzed: '+str(counter_x+1))
             for counter_y in range((counter_x+1)):
                 counter_y_numpy_row = v.table_sample_numpy[counter_y:(counter_y+1),:]
                 comparison_bool_series_match = counter_x_numpy_row == counter_y_numpy_row

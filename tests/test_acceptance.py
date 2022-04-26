@@ -36,6 +36,6 @@ def test_acceptance(test: AcceptanceTest, tmp_path: Path) -> None:
 
     for test_file in test_path.iterdir():
         tmp_file = tmp_path / test_file.name
-        assert tmp_file.exists
+        assert tmp_file.exists()
         if test_file.suffix in ['.csv', '.fasta']:
             assert cmp(test_file, tmp_file)
