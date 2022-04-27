@@ -24,7 +24,7 @@ setup(
         include=('itaxotools*',),
         where='src',
     ),
-    python_requires='>=3.9, <4',
+    python_requires='>=3.8.12, <4',
     install_requires=[
         'biopython>=1.78',
         'matplotlib>=3.4.2',
