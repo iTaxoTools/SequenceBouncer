@@ -24,7 +24,7 @@ setup(
         include=('itaxotools*',),
         where='src',
     ),
-    python_requires='>=3.8.12, <4',
+    python_requires='>=3.8.6, <4',
     install_requires=[
         'biopython>=1.78',
         'matplotlib>=3.4.2',
@@ -44,6 +44,7 @@ setup(
         'Programming Language :: Python :: 3',
         'Programming Language :: Python :: 3.8',
         'Programming Language :: Python :: 3.9',
+        'Programming Language :: Python :: 3.10',
         'Programming Language :: Python :: 3 :: Only',
     ],
     include_package_data=True,

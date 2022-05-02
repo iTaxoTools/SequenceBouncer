@@ -5,4 +5,7 @@ This is a setuptools project for [SequenceBouncer](https://github.com/corydunnla
 Please refer to the original [README](README.original.txt) for details.
 
 ## Changes
-- TBA
+- Bundle as setuptools package
+- Convert script into reusable class
+- Add options for output file creation
+- Add basic acceptance test
